@@ -1,10 +1,57 @@
 <!doctype html>
-<html lang="en">
+<html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- ─── Favicon ─── -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>-------</title>
+    <link rel="alternate icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- ─── Viewport & PWA ─── -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DigiStore" />
+    <meta name="application-name" content="DigiStore" />
+
+    <!-- ─── Theme Colors & Script ─── -->
+    <meta name="theme-color" content="#07090e" />
+    <meta name="msapplication-TileColor" content="#07090e" />
+    <meta name="msapplication-navbutton-color" content="#07090e" />
+    <script>
+      try {
+        var savedTheme = localStorage.getItem('digistore_theme') || 'emerald';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } catch (e) {}
+    </script>
+
+    <!-- ─── SEO ─── -->
+    <title>DigiStore | متجر العملات الرقمية وشحن الألعاب والبطاقات</title>
+    <meta name="description" content="المتجر الرقمي الأول في موريتانيا: شراء USDT والبيتكوين، شحن شدات ببجي وجواهر فري فاير، وبطاقات أبل وبلايستيشن عبر بنكيلي ومصرفي والسداد. تسليم فوري!" />
+    <meta name="keywords" content="متجر رقمي، موريتانيا، USDT، عملات رقمية، شحن ببجي، فري فاير، بلايستيشن، بنكيلي، مصرفي" />
+    <meta name="author" content="DigiStore MR" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- ─── Open Graph ─── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DigiStore | المتجر الرقمي الأول في موريتانيا" />
+    <meta property="og:description" content="شراء العملات الرقمية وشحن الألعاب وبطاقات الهدايا بأسهل طرق الدفع المحلية. تسليم فوري ودعم مباشر." />
+    <meta property="og:image" content="/pwa-512x512.png" />
+    <meta property="og:locale" content="ar_MR" />
+    <meta property="og:site_name" content="DigiStore" />
+
+    <!-- ─── Twitter Card ─── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="DigiStore | المتجر الرقمي" />
+    <meta name="twitter:description" content="شراء USDT والعملات الرقمية وشحن الألعاب وبطاقات الهدايا في موريتانيا" />
+    <meta name="twitter:image" content="/pwa-512x512.png" />
+
+    <!-- ─── Google Fonts: Cairo ─── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
