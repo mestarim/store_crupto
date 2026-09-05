@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const StoreContext = createContext();
 
@@ -169,7 +170,7 @@ const initialReviews = {
 };
 
 export function StoreProvider({ children }) {
-  // Persistence loaders
+  // Persistence loaders (with fallback to local storage)
   const [products, setProducts] = useState(() => {
     try {
       const saved = localStorage.getItem('digistore_products');
@@ -253,6 +254,9 @@ export function StoreProvider({ children }) {
 
   const [toast, setToast] = useState(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
 
   // Sync to localStorage
   useEffect(() => {
@@ -284,12 +288,207 @@ export function StoreProvider({ children }) {
   }, [storeSettings]);
 
   // Toast Helper
-  const showToast = (message, type = 'success') => {
+  const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, id: Date.now() });
     setTimeout(() => {
       setToast(null);
     }, 3200);
-  };
+  }, []);
+
+  // Sync with Supabase (Fetch all)
+  const syncWithSupabase = useCallback(async (notify = false) => {
+    if (!isSupabaseConfigured || !supabase) {
+      if (notify) showToast('قاعدة بيانات Supabase غير مهيأة بعد', 'info');
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      // 1. Fetch Products
+      const { data: prods, error: prodErr } = await supabase
+        .from('crypto_products')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (!prodErr && prods && prods.length > 0) {
+        const formattedProds = prods.map(p => ({
+          ...p,
+          id: isNaN(Number(p.id)) ? p.id : Number(p.id),
+          price: Number(p.price),
+          options: Array.isArray(p.options) ? p.options : []
+        }));
+        setProducts(formattedProds);
+      }
+
+      // 2. Fetch Orders
+      const { data: ords, error: ordErr } = await supabase
+        .from('crypto_orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!ordErr && ords) {
+        const formattedOrders = ords.map(o => ({
+          id: o.id,
+          customer: o.customer,
+          phone: o.phone,
+          paymentMethod: o.payment_method,
+          date: o.date,
+          total: Number(o.total),
+          subtotal: Number(o.subtotal),
+          discountAmount: Number(o.discount_amount || 0),
+          couponCode: o.coupon_code,
+          status: o.status,
+          digitalCode: o.digital_code || '',
+          items: Array.isArray(o.items) ? o.items : [],
+          receiptImage: o.receipt_image
+        }));
+        setOrders(formattedOrders);
+      }
+
+      // 3. Fetch Coupons
+      const { data: cpnData, error: cpnErr } = await supabase
+        .from('crypto_coupons')
+        .select('*')
+        .eq('active', true);
+
+      if (!cpnErr && cpnData && cpnData.length > 0) {
+        const formattedCoupons = cpnData.map(c => ({
+          code: c.code,
+          type: c.type,
+          value: Number(c.value),
+          label: c.label,
+          minOrder: Number(c.min_order || 0)
+        }));
+        setCoupons(formattedCoupons);
+      }
+
+      // 4. Fetch Reviews
+      const { data: revData, error: revErr } = await supabase
+        .from('crypto_reviews')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!revErr && revData) {
+        const grouped = {};
+        revData.forEach(r => {
+          const pid = String(r.product_id);
+          if (!grouped[pid]) grouped[pid] = [];
+          grouped[pid].push({
+            id: r.id,
+            name: r.customer_name,
+            rating: r.rating,
+            date: r.date,
+            comment: r.comment,
+            verified: r.verified
+          });
+        });
+        setReviews(grouped);
+      }
+
+      // 5. Fetch Settings
+      const { data: stData, error: stErr } = await supabase
+        .from('crypto_settings')
+        .select('*')
+        .eq('id', 'main_settings')
+        .maybeSingle();
+
+      if (!stErr && stData) {
+        setStoreSettings(prev => ({
+          ...prev,
+          bankilyNumber: stData.bankily_number || prev.bankilyNumber,
+          masriviNumber: stData.masrivi_number || prev.masriviNumber,
+          sedadNumber: stData.sedad_number || prev.sedadNumber,
+          adminPin: stData.admin_pin || prev.adminPin,
+          storeName: stData.store_name || prev.storeName,
+          bannerNotice: stData.banner_notice || prev.bannerNotice,
+          whatsappNumber: stData.whatsapp_number || prev.whatsappNumber,
+          telegramChatId: stData.telegram_chat_id || prev.telegramChatId,
+          telegramAlerts: stData.telegram_alerts ?? prev.telegramAlerts,
+          whatsappAlerts: stData.whatsapp_alerts ?? prev.whatsappAlerts
+        }));
+      }
+
+      setIsSupabaseConnected(true);
+      const nowStr = new Date().toLocaleTimeString('ar-MA');
+      setLastSyncTime(nowStr);
+      if (notify) showToast(`تمت المزامنة الحية مع Supabase بنجاح (${nowStr}) ⚡`);
+    } catch (err) {
+      console.warn('Supabase sync error:', err);
+      setIsSupabaseConnected(false);
+      if (notify) showToast('فشلت المزامنة مع خادم السحاب', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [showToast]);
+
+  // Initial Sync and Realtime Listeners
+  useEffect(() => {
+    syncWithSupabase(false);
+
+    if (!isSupabaseConfigured || !supabase) return;
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('crypto_store_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crypto_orders' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          const o = payload.new;
+          const newOrd = {
+            id: o.id,
+            customer: o.customer,
+            phone: o.phone,
+            paymentMethod: o.payment_method,
+            date: o.date,
+            total: Number(o.total),
+            subtotal: Number(o.subtotal),
+            discountAmount: Number(o.discount_amount || 0),
+            couponCode: o.coupon_code,
+            status: o.status,
+            digitalCode: o.digital_code || '',
+            items: Array.isArray(o.items) ? o.items : [],
+            receiptImage: o.receipt_image
+          };
+          setOrders(prev => [newOrd, ...prev.filter(item => item.id !== newOrd.id)]);
+        } else if (payload.eventType === 'UPDATE') {
+          const o = payload.new;
+          setOrders(prev => prev.map(item => item.id === o.id ? {
+            ...item,
+            status: o.status,
+            digitalCode: o.digital_code !== undefined ? o.digital_code : item.digitalCode,
+            total: Number(o.total),
+            subtotal: Number(o.subtotal)
+          } : item));
+        } else if (payload.eventType === 'DELETE') {
+          setOrders(prev => prev.filter(item => item.id !== payload.old.id));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crypto_reviews' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          const r = payload.new;
+          const pid = String(r.product_id);
+          setReviews(prev => ({
+            ...prev,
+            [pid]: [{
+              id: r.id,
+              name: r.customer_name,
+              rating: r.rating,
+              date: r.date,
+              comment: r.comment,
+              verified: r.verified
+            }, ...(prev[pid] || []).filter(item => item.id !== r.id)]
+          }));
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsSupabaseConnected(true);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [syncWithSupabase]);
 
   // Cart Operations
   const addToCart = (product, quantity = 1, selectedOption = null) => {
@@ -372,23 +571,46 @@ export function StoreProvider({ children }) {
     showToast('تمت إزالة الكوبون', 'info');
   };
 
-  const addCoupon = (newCoupon) => {
+  const addCoupon = async (newCoupon) => {
     const created = {
       ...newCoupon,
       code: newCoupon.code.toUpperCase().trim()
     };
     setCoupons(prev => [created, ...prev.filter(c => c.code !== created.code)]);
     showToast(`تمت إضافة الكوبون "${created.code}" بنجاح 🏷️`);
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_coupons').upsert({
+          code: created.code,
+          type: created.type,
+          value: created.value,
+          label: created.label,
+          min_order: created.minOrder || 0,
+          active: true
+        });
+      } catch (err) {
+        console.warn('Coupon Supabase save error:', err);
+      }
+    }
   };
 
-  const deleteCoupon = (code) => {
+  const deleteCoupon = async (code) => {
     setCoupons(prev => prev.filter(c => c.code !== code));
     if (appliedCoupon?.code === code) setAppliedCoupon(null);
     showToast(`تم حذف الكوبون "${code}"`, 'info');
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_coupons').delete().eq('code', code);
+      } catch (err) {
+        console.warn('Coupon Supabase delete error:', err);
+      }
+    }
   };
 
   // Reviews Logic
-  const addReview = (productId, reviewData) => {
+  const addReview = async (productId, reviewData) => {
     const newRev = {
       id: Date.now(),
       name: reviewData.name || 'عميل DigiStore',
@@ -402,6 +624,21 @@ export function StoreProvider({ children }) {
       [productId]: [newRev, ...(prev[productId] || [])]
     }));
     showToast('شكراً لك! تم نشر تقييمك ومراجعته بنجاح ⭐');
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_reviews').insert([{
+          product_id: String(productId),
+          customer_name: newRev.name,
+          rating: newRev.rating,
+          date: 'الآن',
+          comment: newRev.comment,
+          verified: true
+        }]);
+      } catch (err) {
+        console.warn('Review Supabase insert error:', err);
+      }
+    }
   };
 
   const getProductReviews = (productId) => {
@@ -409,9 +646,9 @@ export function StoreProvider({ children }) {
   };
 
   // Orders Operations
-  const addOrder = (orderData) => {
+  const addOrder = async (orderData) => {
     const newOrder = {
-      id: `#ORD-${Math.floor(100 + Math.random() * 900)}`,
+      id: `#ORD-${Math.floor(1000 + Math.random() * 9000)}`,
       date: new Date().toISOString().split('T')[0],
       status: 'pending',
       digitalCode: '',
@@ -421,31 +658,76 @@ export function StoreProvider({ children }) {
     };
     setOrders(prev => [newOrder, ...prev]);
     showToast(`تم إرسال طلبك بنجاح (${newOrder.id}) 🎉`);
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_orders').insert([{
+          id: newOrder.id,
+          customer: newOrder.customer,
+          phone: newOrder.phone,
+          payment_method: newOrder.paymentMethod,
+          date: newOrder.date,
+          total: newOrder.total,
+          subtotal: newOrder.subtotal,
+          discount_amount: newOrder.discountAmount || 0,
+          coupon_code: newOrder.couponCode || null,
+          status: 'pending',
+          digital_code: '',
+          items: newOrder.items || [],
+          receipt_image: newOrder.receiptImage || null
+        }]);
+      } catch (err) {
+        console.warn('Order Supabase insert error:', err);
+      }
+    }
+
     return newOrder;
   };
 
-  const updateOrderStatus = (orderId, newStatus) => {
+  const updateOrderStatus = async (orderId, newStatus) => {
+    let generatedCode = '';
     setOrders(prev => prev.map(order => {
       if (order.id === orderId) {
         let code = order.digitalCode;
-        // If transitioning to completed and no digital code yet, auto-generate one
         if (newStatus === 'completed' && (!code || !code.trim())) {
           const rand = Math.floor(1000 + Math.random() * 9000);
           const rand2 = Math.floor(1000 + Math.random() * 9000);
           code = `DIGI-VAULT-${rand}-${rand2}`;
+          generatedCode = code;
         }
         return { ...order, status: newStatus, digitalCode: code };
       }
       return order;
     }));
+
     showToast(`تم تحديث حالة الطلب ${orderId} إلى: ${newStatus === 'completed' ? 'مكتمل' : newStatus === 'cancelled' ? 'ملغي' : 'قيد المعالجة'}`);
+
+    if (supabase) {
+      try {
+        const updatePayload = { status: newStatus };
+        if (generatedCode) {
+          updatePayload.digital_code = generatedCode;
+        }
+        await supabase.from('crypto_orders').update(updatePayload).eq('id', orderId);
+      } catch (err) {
+        console.warn('Order status Supabase update error:', err);
+      }
+    }
   };
 
-  const updateOrderDigitalCode = (orderId, newCode) => {
+  const updateOrderDigitalCode = async (orderId, newCode) => {
     setOrders(prev => prev.map(order => 
       order.id === orderId ? { ...order, digitalCode: newCode } : order
     ));
     showToast(`تم تحديث كود التسليم الرقمي للطلب ${orderId} بنجاح 🔑`);
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_orders').update({ digital_code: newCode }).eq('id', orderId);
+      } catch (err) {
+        console.warn('Order code Supabase update error:', err);
+      }
+    }
   };
 
   // Export Orders CSV (Excel friendly with UTF-8 BOM)
@@ -482,28 +764,64 @@ export function StoreProvider({ children }) {
   };
 
   // Products CRUD Operations (Admin)
-  const addProduct = (newProduct) => {
+  const addProduct = async (newProduct) => {
     const created = {
       ...newProduct,
-      id: Date.now(),
+      id: String(Date.now()),
       price: parseFloat(newProduct.price) || 0
     };
     setProducts(prev => [created, ...prev]);
     showToast(`تمت إضافة المنتج "${created.title}" بنجاح ✨`);
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_products').insert([{
+          id: String(created.id),
+          title: created.title,
+          price: created.price,
+          image: created.image,
+          category: created.category,
+          type: created.type,
+          description: created.description,
+          options: created.options || []
+        }]);
+      } catch (err) {
+        console.warn('Product Supabase insert error:', err);
+      }
+    }
+
     return created;
   };
 
-  const updateProduct = (id, updatedFields) => {
+  const updateProduct = async (id, updatedFields) => {
     setProducts(prev => prev.map(p => 
       p.id === id ? { ...p, ...updatedFields, price: parseFloat(updatedFields.price || p.price) } : p
     ));
     showToast('تم تحديث بيانات المنتج بنجاح ✅');
+
+    if (supabase) {
+      try {
+        const payload = { ...updatedFields };
+        if (payload.price) payload.price = parseFloat(payload.price);
+        await supabase.from('crypto_products').update(payload).eq('id', String(id));
+      } catch (err) {
+        console.warn('Product Supabase update error:', err);
+      }
+    }
   };
 
-  const deleteProduct = (id) => {
+  const deleteProduct = async (id) => {
     const p = products.find(prod => prod.id === id);
     setProducts(prev => prev.filter(prod => prod.id !== id));
     showToast(`تم حذف المنتج "${p?.title || ''}" 🗑️`, 'info');
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_products').delete().eq('id', String(id));
+      } catch (err) {
+        console.warn('Product Supabase delete error:', err);
+      }
+    }
   };
 
   // Admin Auth
@@ -523,9 +841,30 @@ export function StoreProvider({ children }) {
     showToast('تم تسجيل الخروج من لوحة التحكم بنجاح', 'info');
   };
 
-  const updateSettings = (newFields) => {
+  const updateSettings = async (newFields) => {
     setStoreSettings(prev => ({ ...prev, ...newFields }));
     showToast('تم حفظ إعدادات المتجر بنجاح ⚙️');
+
+    if (supabase) {
+      try {
+        await supabase.from('crypto_settings').upsert({
+          id: 'main_settings',
+          bankily_number: newFields.bankilyNumber,
+          masrivi_number: newFields.masriviNumber,
+          sedad_number: newFields.sedadNumber,
+          admin_pin: newFields.adminPin,
+          store_name: newFields.storeName,
+          banner_notice: newFields.bannerNotice,
+          whatsapp_number: newFields.whatsappNumber,
+          telegram_chat_id: newFields.telegramChatId,
+          telegram_alerts: newFields.telegramAlerts,
+          whatsapp_alerts: newFields.whatsappAlerts,
+          updated_at: new Date()
+        });
+      } catch (err) {
+        console.warn('Settings Supabase upsert error:', err);
+      }
+    }
   };
 
   return (
@@ -564,7 +903,11 @@ export function StoreProvider({ children }) {
       storeSettings,
       updateSettings,
       toast,
-      showToast
+      showToast,
+      isSupabaseConnected,
+      isSyncing,
+      lastSyncTime,
+      syncWithSupabase
     }}>
       {children}
     </StoreContext.Provider>

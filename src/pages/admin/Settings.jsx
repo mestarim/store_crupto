@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Save, KeyRound, Phone, Bell, CheckCircle2, Download, Upload, RotateCcw, AlertTriangle, Tag, Plus, Trash2, Send, MessageCircle } from 'lucide-react';
+import { Save, KeyRound, Phone, Bell, CheckCircle2, Download, Upload, RotateCcw, AlertTriangle, Tag, Plus, Trash2, Send, MessageCircle, Cloud, RefreshCw } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 
 export default function Settings() {
-  const { storeSettings, updateSettings, products, setProducts, orders, showToast, coupons, addCoupon, deleteCoupon } = useStore();
+  const { storeSettings, updateSettings, products, setProducts, orders, showToast, coupons, addCoupon, deleteCoupon, isSupabaseConnected, isSyncing, lastSyncTime, syncWithSupabase } = useStore();
   const [formData, setFormData] = useState({ ...storeSettings });
   const [isSaved, setIsSaved] = useState(false);
   const fileInputRef = useRef(null);
@@ -279,6 +279,53 @@ export default function Settings() {
 
         {/* Data Backup & Management Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          {/* Supabase Cloud Sync Card */}
+          <div className="card" style={{ backgroundColor: '#1e293b', padding: '24px', border: '1px solid #334155', borderRadius: '16px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: isSupabaseConnected ? 'linear-gradient(90deg, #10b981, #06b6d4)' : 'linear-gradient(90deg, #f59e0b, #ef4444)' }} />
+            
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Cloud size={18} color={isSupabaseConnected ? '#10b981' : '#f59e0b'} /> المزامنة السحابية (Supabase)
+              </h3>
+              <span style={{ 
+                fontSize: '11px', 
+                fontWeight: '700', 
+                padding: '3px 9px', 
+                borderRadius: '999px',
+                backgroundColor: isSupabaseConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                color: isSupabaseConnected ? '#34d399' : '#fbbf24',
+                border: `1px solid ${isSupabaseConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isSupabaseConnected ? '#10b981' : '#f59e0b', display: 'inline-block' }}></span>
+                {isSupabaseConnected ? 'متصل وحي' : 'جاري الاتصال'}
+              </span>
+            </div>
+
+            <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '14px', lineHeight: '1.6' }}>
+              المتجر متصل ومزامن مباشرة مع قاعدة بيانات Supabase. الطلبات، المنتجات، والتقييمات يتم تحديثها فورياً لجميع الأجهزة.
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: '#0f172a', borderRadius: '10px', marginBottom: '14px', fontSize: '12px', color: '#cbd5e1' }}>
+              <span>آخر مزامنة ناجحة:</span>
+              <strong style={{ color: '#818cf8', direction: 'ltr' }}>{lastSyncTime || 'الآن'}</strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => syncWithSupabase(true)}
+              disabled={isSyncing}
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '10px', gap: '8px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <RefreshCw size={15} className={isSyncing ? 'animate-spin' : ''} />
+              <span>{isSyncing ? 'جاري المزامنة...' : 'مزامنة وتحديث فوري الآن ⚡'}</span>
+            </button>
+          </div>
+
           <div className="card" style={{ backgroundColor: '#1e293b', padding: '24px', border: '1px solid #334155', borderRadius: '16px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'white', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Download size={18} className="text-primary" /> النسخ الاحتياطي للبيانات
