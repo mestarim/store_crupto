@@ -138,37 +138,8 @@ export default function Products() {
   const fileInputRef = useRef(null);
 
   // Form & Variant States
-  const [variantMode, setVariantMode] = useState('visual'); // 'visual' | 'text'
   const [showLivePreview, setShowLivePreview] = useState(true);
-  const [optionsStr, setOptionsStr] = useState('');
 
-  // Helper to convert structured options array to readable text lines
-  const syncToText = (opts = []) => {
-    return opts.map(o => {
-      let line = `${o.label}: ${o.price}`;
-      if (o.originalPrice) line += ` : ${o.originalPrice}`;
-      if (o.badge) line += ` : ${o.badge}`;
-      return line;
-    }).join('\n');
-  };
-
-  // Helper to parse text lines back to structured options
-  const syncFromText = (text = '') => {
-    if (!text.trim()) return [];
-    return text.split('\n').map((line, idx) => {
-      const parts = line.split(':');
-      if (parts.length >= 2) {
-        return {
-          id: `opt-${Date.now()}-${idx}`,
-          label: parts[0].trim(),
-          price: parts[1].trim(),
-          originalPrice: parts[2] ? parts[2].trim() : '',
-          badge: parts[3] ? parts[3].trim() : '',
-        };
-      }
-      return null;
-    }).filter(Boolean);
-  };
 
   const initialForm = {
     title: '',
@@ -209,10 +180,8 @@ export default function Products() {
   const openAddModal = () => {
     setEditingProduct(null);
     setFormData(initialForm);
-    setOptionsStr(syncToText(initialForm.options));
     setUploadedInfo(null);
     setImageTab('upload');
-    setVariantMode('visual');
     setIsModalOpen(true);
   };
 
@@ -238,10 +207,8 @@ export default function Products() {
       description: product.description || '',
       options: opts
     });
-    setOptionsStr(syncToText(opts));
     setUploadedInfo(null);
     setImageTab(product.image && product.image.startsWith('data:') ? 'upload' : 'url');
-    setVariantMode('visual');
     setIsModalOpen(true);
   };
 
@@ -262,20 +229,17 @@ export default function Products() {
     };
     const next = [...formData.options, newOpt];
     setFormData(prev => ({ ...prev, options: next }));
-    setOptionsStr(syncToText(next));
   };
 
   const handleUpdateVariant = (index, field, value) => {
     const next = [...formData.options];
     next[index] = { ...next[index], [field]: value };
     setFormData(prev => ({ ...prev, options: next }));
-    setOptionsStr(syncToText(next));
   };
 
   const handleRemoveVariant = (index) => {
     const next = formData.options.filter((_, i) => i !== index);
     setFormData(prev => ({ ...prev, options: next }));
-    setOptionsStr(syncToText(next));
   };
 
   const handleDuplicateVariant = (index) => {
@@ -288,7 +252,6 @@ export default function Products() {
     const next = [...formData.options];
     next.splice(index + 1, 0, copy);
     setFormData(prev => ({ ...prev, options: next }));
-    setOptionsStr(syncToText(next));
     if (showToast) showToast('تم تكرار الفئة بنجاح 📋');
   };
 
@@ -300,18 +263,15 @@ export default function Products() {
     next[index] = next[targetIndex];
     next[targetIndex] = temp;
     setFormData(prev => ({ ...prev, options: next }));
-    setOptionsStr(syncToText(next));
   };
 
   const handleClearAllVariants = () => {
     setFormData(prev => ({ ...prev, options: [] }));
-    setOptionsStr('');
     if (showToast) showToast('تم مسح جميع الفئات');
   };
 
   const handleSetPriceFromLowest = () => {
-    const activeOpts = variantMode === 'text' ? syncFromText(optionsStr) : formData.options;
-    const validPrices = activeOpts
+    const validPrices = formData.options
       .map(o => parseFloat(o.price))
       .filter(p => !isNaN(p) && p > 0);
     if (validPrices.length > 0) {
@@ -481,7 +441,6 @@ export default function Products() {
       description: defaultDesc || prev.description,
       options: opts
     }));
-    setOptionsStr(syncToText(opts));
     if (showToast) showToast('تم تطبيق القالب النموذجي بنجاح ✨');
   };
 
@@ -493,9 +452,7 @@ export default function Products() {
       return;
     }
 
-    const activeOpts = variantMode === 'text' ? syncFromText(optionsStr) : formData.options;
-
-    const cleanedOptions = activeOpts
+    const cleanedOptions = formData.options
       .map(opt => ({
         label: opt.label ? opt.label.trim() : '',
         price: parseFloat(opt.price) || 0,
@@ -1168,7 +1125,7 @@ export default function Products() {
                     image={formData.image || 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'}
                     category={formData.category}
                     type={formData.type}
-                    options={(variantMode === 'text' ? syncFromText(optionsStr) : formData.options)
+                    options={formData.options
                       .map(o => ({
                         label: o.label || 'باقة',
                         price: parseFloat(o.price) || 0,
@@ -1540,41 +1497,21 @@ export default function Products() {
                     </p>
                   </div>
 
-                  {/* Mode switcher tabs (Visual vs Quick Text) */}
-                  <div style={{ display: 'flex', backgroundColor: '#0b1120', padding: '3px', borderRadius: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setVariantMode('visual')}
-                      style={{
-                        padding: '4px 12px',
-                        borderRadius: '7px',
-                        fontSize: '12px',
-                        fontWeight: variantMode === 'visual' ? '800' : '600',
-                        backgroundColor: variantMode === 'visual' ? '#4f46e5' : 'transparent',
-                        color: variantMode === 'visual' ? 'white' : '#94a3b8',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      قائمة مرئية تفاعلية
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOptionsStr(syncToText(formData.options));
-                        setVariantMode('text');
-                      }}
-                      style={{
-                        padding: '4px 12px',
-                        borderRadius: '7px',
-                        fontSize: '12px',
-                        fontWeight: variantMode === 'text' ? '800' : '600',
-                        backgroundColor: variantMode === 'text' ? '#4f46e5' : 'transparent',
-                        color: variantMode === 'text' ? 'white' : '#94a3b8',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      تحرير نصي سريع
-                    </button>
+                  {/* Variant count badge */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 12px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(99,102,241,0.12)',
+                    border: '1px solid rgba(99,102,241,0.25)',
+                    color: '#a5b4fc',
+                    fontSize: '12px',
+                    fontWeight: '800'
+                  }}>
+                    <Layers size={14} />
+                    <span>{formData.options.length} فئة</span>
                   </div>
                 </div>
 
@@ -1700,7 +1637,7 @@ export default function Products() {
                 </div>
 
                 {/* ─── VISUAL BUILDER MODE ─── */}
-                {variantMode === 'visual' && (
+                {true && (
                   <div>
                     {formData.options.length === 0 ? (
                       <div style={{
@@ -2003,31 +1940,7 @@ export default function Products() {
                   </div>
                 )}
 
-                {/* ─── QUICK TEXT MODE (FOR BULK COPY/PASTE) ─── */}
-                {variantMode === 'text' && (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                        اكتب كل فئة في سطر منفصل بالصيغة: <strong style={{ color: '#c7d2fe' }}>الاسم: السعر: السعر_قبل_الخصم: الشارة</strong>
-                      </span>
-                    </div>
-                    <textarea 
-                      className="form-input" 
-                      rows={5}
-                      placeholder={"60 UC: 0.99\n325 UC: 4.99 : 5.50 : +25 مجاناً\n660 UC: 9.99 : 11.50 : الأكثر طلباً 🔥"}
-                      value={optionsStr}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setOptionsStr(val);
-                        setFormData(prev => ({ ...prev, options: syncFromText(val) }));
-                      }}
-                      style={{ fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#0a0f1d', borderColor: '#26354a' }}
-                    />
-                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                      سيتم تحويل هذا النص تلقائياً إلى بطاقات وخيارات قابلة للاختيار والنقر المباشر في واجهة المتجر.
-                    </span>
-                  </div>
-                )}
+
               </div>
 
               {/* Description */}
