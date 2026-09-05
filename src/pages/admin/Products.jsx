@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { 
   Plus, Edit2, Trash2, Search, X, UploadCloud, Download, 
-  Image as ImageIcon, Check, AlertTriangle, ExternalLink, 
-  RefreshCw, Layers, DollarSign, Tag, Sparkles, Eye, FileText,
-  Copy
+  Image as ImageIcon, AlertTriangle, 
+  Layers, DollarSign, Tag, Sparkles, Eye, 
+  Copy, ArrowUp, ArrowDown, EyeOff, Zap
 } from 'lucide-react';
+import ProductCard from '../../components/ProductCard';
 import { useStore } from '../../context/StoreContext';
 
 // Helper to optimize and compress image before saving to localStorage
@@ -136,15 +137,53 @@ export default function Products() {
   const [uploadedInfo, setUploadedInfo] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Form state
+  // Form & Variant States
+  const [variantMode, setVariantMode] = useState('visual'); // 'visual' | 'text'
+  const [showLivePreview, setShowLivePreview] = useState(true);
+  const [optionsStr, setOptionsStr] = useState('');
+
+  // Helper to convert structured options array to readable text lines
+  const syncToText = (opts = []) => {
+    return opts.map(o => {
+      let line = `${o.label}: ${o.price}`;
+      if (o.originalPrice) line += ` : ${o.originalPrice}`;
+      if (o.badge) line += ` : ${o.badge}`;
+      return line;
+    }).join('\n');
+  };
+
+  // Helper to parse text lines back to structured options
+  const syncFromText = (text = '') => {
+    if (!text.trim()) return [];
+    return text.split('\n').map((line, idx) => {
+      const parts = line.split(':');
+      if (parts.length >= 2) {
+        return {
+          id: `opt-${Date.now()}-${idx}`,
+          label: parts[0].trim(),
+          price: parts[1].trim(),
+          originalPrice: parts[2] ? parts[2].trim() : '',
+          badge: parts[3] ? parts[3].trim() : '',
+        };
+      }
+      return null;
+    }).filter(Boolean);
+  };
+
   const initialForm = {
     title: '',
     category: 'Crypto',
     type: 'crypto',
     price: '',
+    originalPrice: '',
     image: 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     description: '',
-    optionsStr: '100 USDT: 101.50\n500 USDT: 505.00'
+    options: [
+      { id: 'opt-1', label: '50 USDT', price: '51.00', originalPrice: '', badge: '' },
+      { id: 'opt-2', label: '100 USDT', price: '101.50', originalPrice: '', badge: 'الأكثر طلباً 🔥' },
+      { id: 'opt-3', label: '500 USDT', price: '505.00', originalPrice: '510.00', badge: 'وفر 5 MRU' },
+      { id: 'opt-4', label: '1000 USDT', price: '1008.00', originalPrice: '1020.00', badge: 'أفضل سعر ⭐' },
+    ]
   };
   const [formData, setFormData] = useState(initialForm);
 
@@ -170,28 +209,39 @@ export default function Products() {
   const openAddModal = () => {
     setEditingProduct(null);
     setFormData(initialForm);
+    setOptionsStr(syncToText(initialForm.options));
     setUploadedInfo(null);
     setImageTab('upload');
+    setVariantMode('visual');
     setIsModalOpen(true);
   };
 
   const openEditModal = (product) => {
     setEditingProduct(product);
-    const optionsStr = product.options 
-      ? product.options.map(opt => `${opt.label}: ${opt.price}`).join('\n')
-      : '';
+    const opts = product.options && Array.isArray(product.options)
+      ? product.options.map((opt, idx) => ({
+          id: `opt-${idx}`,
+          label: opt.label || '',
+          price: opt.price !== undefined ? opt.price.toString() : '',
+          originalPrice: opt.originalPrice !== undefined ? opt.originalPrice.toString() : '',
+          badge: opt.badge || ''
+        }))
+      : [];
 
     setFormData({
-      title: product.title,
+      title: product.title || '',
       category: product.category || 'Crypto',
       type: product.type || (product.category === 'Crypto' ? 'crypto' : product.category === 'Games' ? 'game' : 'gift'),
-      price: product.price.toString(),
+      price: product.price !== undefined ? product.price.toString() : '',
+      originalPrice: product.originalPrice !== undefined ? product.originalPrice.toString() : '',
       image: product.image || '',
       description: product.description || '',
-      optionsStr
+      options: opts
     });
+    setOptionsStr(syncToText(opts));
     setUploadedInfo(null);
     setImageTab(product.image && product.image.startsWith('data:') ? 'upload' : 'url');
+    setVariantMode('visual');
     setIsModalOpen(true);
   };
 
@@ -199,6 +249,78 @@ export default function Products() {
     setIsModalOpen(false);
     setEditingProduct(null);
     setUploadedInfo(null);
+  };
+
+  // Variant Manipulation Handlers
+  const handleAddVariant = () => {
+    const newOpt = {
+      id: `opt-${Date.now()}`,
+      label: '',
+      price: '',
+      originalPrice: '',
+      badge: ''
+    };
+    const next = [...formData.options, newOpt];
+    setFormData(prev => ({ ...prev, options: next }));
+    setOptionsStr(syncToText(next));
+  };
+
+  const handleUpdateVariant = (index, field, value) => {
+    const next = [...formData.options];
+    next[index] = { ...next[index], [field]: value };
+    setFormData(prev => ({ ...prev, options: next }));
+    setOptionsStr(syncToText(next));
+  };
+
+  const handleRemoveVariant = (index) => {
+    const next = formData.options.filter((_, i) => i !== index);
+    setFormData(prev => ({ ...prev, options: next }));
+    setOptionsStr(syncToText(next));
+  };
+
+  const handleDuplicateVariant = (index) => {
+    const target = formData.options[index];
+    const copy = {
+      ...target,
+      id: `opt-${Date.now()}`,
+      label: target.label ? `${target.label} (نسخة)` : 'نسخة جديدة'
+    };
+    const next = [...formData.options];
+    next.splice(index + 1, 0, copy);
+    setFormData(prev => ({ ...prev, options: next }));
+    setOptionsStr(syncToText(next));
+    if (showToast) showToast('تم تكرار الفئة بنجاح 📋');
+  };
+
+  const handleMoveVariant = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= formData.options.length) return;
+    const next = [...formData.options];
+    const temp = next[index];
+    next[index] = next[targetIndex];
+    next[targetIndex] = temp;
+    setFormData(prev => ({ ...prev, options: next }));
+    setOptionsStr(syncToText(next));
+  };
+
+  const handleClearAllVariants = () => {
+    setFormData(prev => ({ ...prev, options: [] }));
+    setOptionsStr('');
+    if (showToast) showToast('تم مسح جميع الفئات');
+  };
+
+  const handleSetPriceFromLowest = () => {
+    const activeOpts = variantMode === 'text' ? syncFromText(optionsStr) : formData.options;
+    const validPrices = activeOpts
+      .map(o => parseFloat(o.price))
+      .filter(p => !isNaN(p) && p > 0);
+    if (validPrices.length > 0) {
+      const min = Math.min(...validPrices);
+      setFormData(prev => ({ ...prev, price: min.toString() }));
+      if (showToast) showToast(`تم ضبط السعر الأساسي على أقل فئة (${min} MRU) ✨`);
+    } else {
+      if (showToast) showToast('لا توجد أسعار صالحة في الفئات الحالية', 'info');
+    }
   };
 
   // Handle local image file upload & compression
@@ -249,63 +371,158 @@ export default function Products() {
     if (file) handleFileProcess(file);
   };
 
-  // Option Presets Helpers
-  const applyPreset = (type) => {
-    if (type === 'crypto') {
-      setFormData(prev => ({
-        ...prev,
-        category: 'Crypto',
-        optionsStr: '50 USDT: 51.00\n100 USDT: 101.50\n500 USDT: 505.00\n1000 USDT: 1008.00'
-      }));
-    } else if (type === 'pubg') {
-      setFormData(prev => ({
-        ...prev,
-        category: 'Games',
-        optionsStr: '60 UC: 0.99\n325 UC: 4.99\n660 UC: 9.99\n1800 UC: 24.99'
-      }));
-    } else if (type === 'cards') {
-      setFormData(prev => ({
-        ...prev,
-        category: 'Cards',
-        optionsStr: '$10 بطاقة: 9.90\n$25 بطاقة: 24.50\n$50 بطاقة: 49.00\n$100 بطاقة: 97.00'
-      }));
+  // Comprehensive Presets Library
+  const applyPreset = (presetType) => {
+    let cat = formData.category;
+    let opts = [];
+    let defaultPrice = '';
+    let defaultImg = formData.image;
+    let defaultDesc = formData.description;
+    let titlePlaceholder = formData.title;
+
+    if (presetType === 'usdt') {
+      cat = 'Crypto';
+      opts = [
+        { id: '1', label: '10 USDT', price: '10.50', originalPrice: '', badge: '' },
+        { id: '2', label: '50 USDT', price: '51.00', originalPrice: '', badge: '' },
+        { id: '3', label: '100 USDT', price: '101.50', originalPrice: '', badge: 'الأكثر طلباً 🔥' },
+        { id: '4', label: '500 USDT', price: '505.00', originalPrice: '510.00', badge: 'وفر 5 MRU' },
+        { id: '5', label: '1000 USDT', price: '1008.00', originalPrice: '1020.00', badge: 'أفضل سعر ⭐' }
+      ];
+      defaultPrice = '10.50';
+      if (!titlePlaceholder) titlePlaceholder = 'USDT (Tether)';
+      if (!defaultDesc) defaultDesc = 'شراء وتعبئة رصيد USDT الفوري عبر شبكات TRC20 / BEP20 مباشرة إلى محفظتك.';
+      defaultImg = 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+    } else if (presetType === 'pubg') {
+      cat = 'Games';
+      opts = [
+        { id: '1', label: '60 UC', price: '0.99', originalPrice: '', badge: '' },
+        { id: '2', label: '325 UC', price: '4.99', originalPrice: '', badge: '+25 مجاناً' },
+        { id: '3', label: '660 UC', price: '9.99', originalPrice: '11.50', badge: 'الأكثر طلباً 🔥' },
+        { id: '4', label: '1800 UC', price: '24.99', originalPrice: '28.00', badge: 'بونص +300 🎁' },
+        { id: '5', label: '3850 UC', price: '49.99', originalPrice: '55.00', badge: 'الأفضل قيمة ⭐' },
+        { id: '6', label: '8100 UC', price: '99.99', originalPrice: '110.00', badge: 'باقة المحترفين 👑' }
+      ];
+      defaultPrice = '0.99';
+      if (!titlePlaceholder) titlePlaceholder = 'PUBG Mobile UC';
+      if (!defaultDesc) defaultDesc = 'شحن رسمي وفوري لشدات ببجي موبايل عن طريق ID الحساب.';
+      defaultImg = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+    } else if (presetType === 'freefire') {
+      cat = 'Games';
+      opts = [
+        { id: '1', label: '100 جوهرة', price: '1.00', originalPrice: '', badge: '' },
+        { id: '2', label: '310 جوهرة', price: '3.10', originalPrice: '', badge: '+31 مجاناً' },
+        { id: '3', label: '520 جوهرة', price: '5.20', originalPrice: '', badge: '+50 بونص 🔥' },
+        { id: '4', label: '1060 جوهرة', price: '10.50', originalPrice: '12.00', badge: 'الأكثر طلباً' },
+        { id: '5', label: '2180 جوهرة', price: '21.00', originalPrice: '24.00', badge: 'توفير كبير ⭐' }
+      ];
+      defaultPrice = '1.00';
+      if (!titlePlaceholder) titlePlaceholder = 'Free Fire Diamonds';
+      if (!defaultDesc) defaultDesc = 'شحن فوري ومضمون لجواهر فري فاير عن طريق المعرف ID.';
+      defaultImg = 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+    } else if (presetType === 'roblox') {
+      cat = 'Games';
+      opts = [
+        { id: '1', label: '400 Robux', price: '4.99', originalPrice: '', badge: '' },
+        { id: '2', label: '800 Robux', price: '9.99', originalPrice: '', badge: 'شائع 🔥' },
+        { id: '3', label: '1700 Robux', price: '19.99', originalPrice: '22.00', badge: 'وفر 10%' },
+        { id: '4', label: '4500 Robux', price: '49.99', originalPrice: '55.00', badge: 'الأفضل قيمة ⭐' }
+      ];
+      defaultPrice = '4.99';
+      if (!titlePlaceholder) titlePlaceholder = 'Roblox Robux';
+      if (!defaultDesc) defaultDesc = 'شحن رصيد روبلكس روبكس فوري ومباشر.';
+      defaultImg = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+    } else if (presetType === 'playstation') {
+      cat = 'Cards';
+      opts = [
+        { id: '1', label: 'بطاقة $10', price: '9.90', originalPrice: '', badge: '' },
+        { id: '2', label: 'بطاقة $25', price: '24.50', originalPrice: '', badge: 'شائع' },
+        { id: '3', label: 'بطاقة $50', price: '49.00', originalPrice: '55.00', badge: 'خصم خاص ✨' },
+        { id: '4', label: 'بطاقة $100', price: '97.00', originalPrice: '105.00', badge: 'الأكثر طلباً 🔥' }
+      ];
+      defaultPrice = '9.90';
+      if (!titlePlaceholder) titlePlaceholder = 'PlayStation Store Card';
+      if (!defaultDesc) defaultDesc = 'أكواد وبطاقات شحن رصيد بلايستيشن ستور أصلية 100%.';
+      defaultImg = 'https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+    } else if (presetType === 'apple') {
+      cat = 'Cards';
+      opts = [
+        { id: '1', label: 'بطاقة $10', price: '9.99', originalPrice: '', badge: '' },
+        { id: '2', label: 'بطاقة $15', price: '14.90', originalPrice: '', badge: '' },
+        { id: '3', label: 'بطاقة $25', price: '24.50', originalPrice: '', badge: 'شائع' },
+        { id: '4', label: 'بطاقة $50', price: '49.00', originalPrice: '53.00', badge: 'وفر 4 MRU' },
+        { id: '5', label: 'بطاقة $100', price: '98.00', originalPrice: '105.00', badge: 'الأفضل قيمة ⭐' }
+      ];
+      defaultPrice = '9.99';
+      if (!titlePlaceholder) titlePlaceholder = 'iTunes & Apple Gift Card';
+      if (!defaultDesc) defaultDesc = 'بطاقات آبل وأيتونز لشراء التطبيقات والاشتراكات في App Store.';
+      defaultImg = 'https://images.unsplash.com/photo-1620189507195-68309c04c4d0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+    } else if (presetType === 'google') {
+      cat = 'Cards';
+      opts = [
+        { id: '1', label: 'بطاقة $5', price: '4.99', originalPrice: '', badge: '' },
+        { id: '2', label: 'بطاقة $10', price: '9.90', originalPrice: '', badge: 'شائع' },
+        { id: '3', label: 'بطاقة $25', price: '24.50', originalPrice: '', badge: 'الأكثر طلباً 🔥' },
+        { id: '4', label: 'بطاقة $50', price: '49.00', originalPrice: '54.00', badge: 'وفر 5 MRU' }
+      ];
+      defaultPrice = '4.99';
+      if (!titlePlaceholder) titlePlaceholder = 'Google Play Gift Card';
+      if (!defaultDesc) defaultDesc = 'بطاقات شحن رصيد جوجل بلاي لشراء التطبيقات والألعاب.';
+      defaultImg = 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
     }
-    if (showToast) showToast('تم تطبيق نموذج الخيارات بنجاح ✨');
+
+    setFormData(prev => ({
+      ...prev,
+      title: titlePlaceholder || prev.title,
+      category: cat,
+      type: cat === 'Crypto' ? 'crypto' : cat === 'Games' ? 'game' : 'gift',
+      price: defaultPrice || prev.price,
+      image: defaultImg || prev.image,
+      description: defaultDesc || prev.description,
+      options: opts
+    }));
+    setOptionsStr(syncToText(opts));
+    if (showToast) showToast('تم تطبيق القالب النموذجي بنجاح ✨');
   };
 
   // Save product
   const handleSave = (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.price) {
-      if (showToast) showToast('يرجى ملء اسم المنتج والسعر الأساسي', 'error');
+    if (!formData.title || !formData.title.trim()) {
+      if (showToast) showToast('يرجى ملء اسم المنتج', 'error');
       return;
     }
 
-    let options = null;
-    if (formData.optionsStr.trim()) {
-      options = formData.optionsStr
-        .split('\n')
-        .map(line => {
-          const parts = line.split(':');
-          if (parts.length === 2) {
-            return {
-              label: parts[0].trim(),
-              price: parseFloat(parts[1].trim()) || 0
-            };
-          }
-          return null;
-        })
-        .filter(Boolean);
+    const activeOpts = variantMode === 'text' ? syncFromText(optionsStr) : formData.options;
+
+    const cleanedOptions = activeOpts
+      .map(opt => ({
+        label: opt.label ? opt.label.trim() : '',
+        price: parseFloat(opt.price) || 0,
+        originalPrice: opt.originalPrice && !isNaN(parseFloat(opt.originalPrice)) ? parseFloat(opt.originalPrice) : undefined,
+        badge: opt.badge && opt.badge.trim() ? opt.badge.trim() : undefined,
+      }))
+      .filter(opt => opt.label && opt.price > 0);
+
+    let finalPrice = parseFloat(formData.price);
+    if (isNaN(finalPrice) || finalPrice <= 0) {
+      if (cleanedOptions.length > 0) {
+        finalPrice = Math.min(...cleanedOptions.map(o => o.price));
+      } else {
+        if (showToast) showToast('يرجى ملء السعر الأساسي للمنتج', 'error');
+        return;
+      }
     }
 
     const payload = {
-      title: formData.title,
+      title: formData.title.trim(),
       category: formData.category,
       type: formData.category === 'Crypto' ? 'crypto' : formData.category === 'Games' ? 'game' : 'gift',
-      price: parseFloat(formData.price),
+      price: finalPrice,
+      originalPrice: formData.originalPrice && !isNaN(parseFloat(formData.originalPrice)) ? parseFloat(formData.originalPrice) : undefined,
       image: formData.image || 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-      description: formData.description,
-      options: options && options.length > 0 ? options : undefined
+      description: formData.description.trim(),
+      options: cleanedOptions.length > 0 ? cleanedOptions : undefined
     };
 
     if (editingProduct) {
@@ -838,38 +1055,133 @@ export default function Products() {
             className="modal-card" 
             onClick={e => e.stopPropagation()} 
             style={{ 
-              padding: '24px', 
-              backgroundColor: '#0f172a', 
+              padding: '26px', 
+              backgroundColor: '#0a0f1d', 
               border: '1px solid #1e293b', 
               borderRadius: '24px',
-              maxWidth: '680px', 
+              maxWidth: '860px', 
               width: '100%',
-              maxHeight: '90vh',
+              maxHeight: '92vh',
               overflowY: 'auto',
-              boxShadow: '0 25px 60px rgba(0,0,0,0.8)'
+              boxShadow: '0 25px 70px rgba(0,0,0,0.85)'
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #1e293b', paddingBottom: '14px' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: '20px', 
+              borderBottom: '1px solid #1e293b', 
+              paddingBottom: '16px',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '900', color: 'white' }}>
-                  {editingProduct ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد للمتجر'}
-                </h3>
-                <p style={{ fontSize: '12px', color: '#94a3b8' }}>
-                  قم بتعيين الاسم، السعر، خيارات الشراء، وارفع صورة مميزة للمنتج
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '19px', fontWeight: '900', color: 'white' }}>
+                    {editingProduct ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد للمتجر'}
+                  </h3>
+                  <span style={{ 
+                    fontSize: '11px', 
+                    fontWeight: '800', 
+                    color: '#818cf8', 
+                    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                    border: '1px solid rgba(99, 102, 241, 0.25)'
+                  }}>
+                    {formData.category}
+                  </span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
+                  عيّن الاسم، السعر، الباقات المتعددة داخل البطاقة، وارفع صورة مميزة مع تجربة المعاينة الفورية
                 </p>
               </div>
-              <button 
-                onClick={closeModal} 
-                style={{ 
-                  color: '#94a3b8', 
-                  width: '34px', height: '34px', borderRadius: '50%', 
-                  backgroundColor: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center' 
-                }}
-              >
-                <X size={18} />
-              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* Live Preview Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowLivePreview(!showLivePreview)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    backgroundColor: showLivePreview ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)',
+                    color: showLivePreview ? '#a5b4fc' : '#94a3b8',
+                    border: `1px solid ${showLivePreview ? 'rgba(99, 102, 241, 0.4)' : '#334155'}`,
+                    cursor: 'pointer'
+                  }}
+                  title="إظهار أو إخفاء معاينة البطاقة الحية"
+                >
+                  {showLivePreview ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span>{showLivePreview ? 'إخفاء المعاينة' : 'معاينة البطاقة'}</span>
+                </button>
+
+                <button 
+                  onClick={closeModal} 
+                  style={{ 
+                    color: '#94a3b8', 
+                    width: '34px', height: '34px', borderRadius: '50%', 
+                    backgroundColor: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
+
+            {/* ─── LIVE CARD PREVIEW (INTERACTIVE) ─── */}
+            {showLivePreview && (
+              <div style={{
+                backgroundColor: '#070a12',
+                border: '1px solid #1f293d',
+                borderRadius: '16px',
+                padding: '16px',
+                marginBottom: '22px',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(15, 23, 42, 0.9) 100%)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+                    <span style={{ fontSize: '13px', fontWeight: '800', color: 'white' }}>
+                      معاينة حية ومباشرة للبطاقة في المتجر:
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                    💡 يمكنك تجربة النقر على أزرار الفئات لاختبار السعر والتفاعل!
+                  </span>
+                </div>
+
+                <div style={{ maxWidth: '280px', margin: '0 auto' }}>
+                  <ProductCard
+                    id={editingProduct?.id || 9999}
+                    title={formData.title || 'اسم المنتج التجريبي'}
+                    price={parseFloat(formData.price) || 0}
+                    originalPrice={formData.originalPrice ? parseFloat(formData.originalPrice) : undefined}
+                    image={formData.image || 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'}
+                    category={formData.category}
+                    type={formData.type}
+                    options={(variantMode === 'text' ? syncFromText(optionsStr) : formData.options)
+                      .map(o => ({
+                        label: o.label || 'باقة',
+                        price: parseFloat(o.price) || 0,
+                        originalPrice: o.originalPrice ? parseFloat(o.originalPrice) : undefined,
+                        badge: o.badge || undefined
+                      }))
+                      .filter(o => o.label)}
+                    description={formData.description}
+                    onClick={() => {}}
+                  />
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               
@@ -881,16 +1193,16 @@ export default function Products() {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="مثال: USDT (TRC20) أو شحن ببجي 660 UC"
+                  placeholder="مثال: USDT (Tether) أو شحن ببجي موبايل أو بطاقة بلايستيشن"
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
-                  style={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
+                  style={{ backgroundColor: '#131b2e', borderColor: '#26354a', fontSize: '14px' }}
                   required
                 />
               </div>
 
-              {/* Category & Price */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+              {/* Category, Base Price & Original Price */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#e2e8f0', marginBottom: '6px' }}>
                     القسم الرئيسي *
@@ -898,8 +1210,15 @@ export default function Products() {
                   <select 
                     className="form-input"
                     value={formData.category}
-                    onChange={e => setFormData({ ...formData, category: e.target.value })}
-                    style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: 'white' }}
+                    onChange={e => {
+                      const newCat = e.target.value;
+                      setFormData({ 
+                        ...formData, 
+                        category: newCat,
+                        type: newCat === 'Crypto' ? 'crypto' : newCat === 'Games' ? 'game' : 'gift'
+                      });
+                    }}
+                    style={{ backgroundColor: '#131b2e', borderColor: '#26354a', color: 'white' }}
                   >
                     <option value="Crypto">عملات رقمية (Crypto)</option>
                     <option value="Games">شحن ألعاب (Games)</option>
@@ -908,9 +1227,21 @@ export default function Products() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#e2e8f0', marginBottom: '6px' }}>
-                    السعر الأساسي (MRU) *
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: '700', color: '#e2e8f0' }}>
+                      السعر الأساسي (MRU) *
+                    </label>
+                    {formData.options.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleSetPriceFromLowest}
+                        style={{ fontSize: '10.5px', color: '#818cf8', cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline' }}
+                        title="تعيين السعر تلقائياً من أقل سعر فئة"
+                      >
+                        ⚡ أقل فئة
+                      </button>
+                    )}
+                  </div>
                   <input 
                     type="number" 
                     step="any"
@@ -918,16 +1249,31 @@ export default function Products() {
                     placeholder="101.50"
                     value={formData.price}
                     onChange={e => setFormData({ ...formData, price: e.target.value })}
-                    style={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
+                    style={{ backgroundColor: '#131b2e', borderColor: '#26354a' }}
                     required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#e2e8f0', marginBottom: '6px' }}>
+                    السعر قبل الخصم (اختياري)
+                  </label>
+                  <input 
+                    type="number" 
+                    step="any"
+                    className="form-input" 
+                    placeholder="مثال: 120.00"
+                    value={formData.originalPrice}
+                    onChange={e => setFormData({ ...formData, originalPrice: e.target.value })}
+                    style={{ backgroundColor: '#131b2e', borderColor: '#26354a' }}
                   />
                 </div>
               </div>
 
               {/* ─── PRODUCT IMAGE MANAGEMENT BOX (UPLOAD & DOWNLOAD) ─── */}
               <div style={{ 
-                backgroundColor: '#161f30', 
-                border: '1px solid #283548', 
+                backgroundColor: '#131b2e', 
+                border: '1px solid #233146', 
                 borderRadius: '16px', 
                 padding: '16px' 
               }}>
@@ -935,12 +1281,12 @@ export default function Products() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <ImageIcon size={18} color="#818cf8" />
                     <span style={{ fontSize: '13px', fontWeight: '800', color: 'white' }}>
-                      صورة المنتج (رفع وتحميل)
+                      صورة المنتج (رفع وتحميل وتحسين)
                     </span>
                   </div>
 
                   {/* Mode switcher tabs */}
-                  <div style={{ display: 'flex', backgroundColor: '#0f172a', padding: '3px', borderRadius: '10px' }}>
+                  <div style={{ display: 'flex', backgroundColor: '#0b1120', padding: '3px', borderRadius: '10px' }}>
                     <button
                       type="button"
                       onClick={() => setImageTab('upload')}
@@ -991,28 +1337,28 @@ export default function Products() {
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current && fileInputRef.current.click()}
                       style={{
-                        border: `2px dashed ${isDragging ? '#6366f1' : '#334155'}`,
-                        backgroundColor: isDragging ? 'rgba(99, 102, 241, 0.08)' : '#0f172a',
+                        border: `2px dashed ${isDragging ? '#6366f1' : '#2d3f59'}`,
+                        backgroundColor: isDragging ? 'rgba(99, 102, 241, 0.08)' : '#0b1120',
                         borderRadius: '12px',
-                        padding: '24px 16px',
+                        padding: '20px 16px',
                         textAlign: 'center',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                       }}
                     >
                       <div style={{ 
-                        width: '46px', height: '46px', borderRadius: '50%', 
+                        width: '44px', height: '44px', borderRadius: '50%', 
                         backgroundColor: 'rgba(99,102,241,0.15)', 
                         color: '#818cf8', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 10px'
+                        margin: '0 auto 8px'
                       }}>
-                        <UploadCloud size={24} />
+                        <UploadCloud size={22} />
                       </div>
-                      <p style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc', marginBottom: '4px' }}>
-                        {uploadingImage ? 'جاري معالجة الصورة...' : 'انقر هنا لاختيار صورة أو اسحبها إلى هنا'}
+                      <p style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc', marginBottom: '3px' }}>
+                        {uploadingImage ? 'جاري معالجة الصورة...' : 'انقر لاختيار صورة من جهازك أو اسحبها هنا'}
                       </p>
                       <p style={{ fontSize: '11px', color: '#64748b' }}>
-                        يدعم PNG, JPG, WebP, SVG • يتم ضغطها وتحسينها تلقائياً للمتجر
+                        PNG, JPG, WebP, SVG • يتم ضغطها وتحسين دقتها تلقائياً
                       </p>
                     </div>
                   </div>
@@ -1027,173 +1373,661 @@ export default function Products() {
                       placeholder="https://images.unsplash.com/..."
                       value={formData.image}
                       onChange={e => setFormData({ ...formData, image: e.target.value })}
-                      style={{ backgroundColor: '#0f172a', borderColor: '#334155', fontSize: '13px' }}
+                      style={{ backgroundColor: '#0b1120', borderColor: '#2d3f59', fontSize: '13px' }}
                     />
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '11px', color: '#64748b' }}>روابط سريعة:</span>
                       <button 
                         type="button" 
                         onClick={() => setFormData({ ...formData, image: 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' })}
                         style={{ fontSize: '11px', color: '#818cf8', textDecoration: 'underline' }}
                       >
-                        صورة Tether
+                        USDT
                       </button>
                       <button 
                         type="button" 
                         onClick={() => setFormData({ ...formData, image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' })}
                         style={{ fontSize: '11px', color: '#818cf8', textDecoration: 'underline' }}
                       >
-                        صورة ألعاب
+                        ألعاب
                       </button>
                       <button 
                         type="button" 
                         onClick={() => setFormData({ ...formData, image: 'https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' })}
                         style={{ fontSize: '11px', color: '#818cf8', textDecoration: 'underline' }}
                       >
-                        صورة بطاقات
+                        بطاقات
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* Image Live Preview & Action Toolbar (Download / Replace / Remove) */}
+                {/* Image Live Preview & Action Toolbar */}
                 {formData.image && (
                   <div style={{ 
-                    marginTop: '14px', 
-                    padding: '12px', 
-                    backgroundColor: '#0f172a', 
+                    marginTop: '12px', 
+                    padding: '10px 14px', 
+                    backgroundColor: '#0b1120', 
                     borderRadius: '12px', 
-                    border: '1px solid #1e293b',
+                    border: '1px solid #233146',
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
                     flexWrap: 'wrap',
-                    gap: '12px'
+                    gap: '10px'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <img 
                         src={formData.image} 
                         alt="معاينة" 
-                        style={{ width: '56px', height: '56px', borderRadius: '10px', objectFit: 'cover', border: '1px solid #334155' }} 
+                        style={{ width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover', border: '1px solid #334155' }} 
                         onError={(e) => {
                           e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.title || 'P')}&background=6366f1&color=fff`;
                         }}
                       />
                       <div>
                         <span style={{ fontSize: '12px', fontWeight: '800', color: 'white', display: 'block' }}>
-                          معاينة الصورة الحالية
+                          معاينة الصورة المعتمدة
                         </span>
-                        <span style={{ fontSize: '11px', color: '#10b981' }}>
+                        <span style={{ fontSize: '10.5px', color: '#10b981' }}>
                           {formData.image.startsWith('data:') 
                             ? (uploadedInfo?.sizeKb ? `ملف مرفوع (${uploadedInfo.sizeKb} KB)` : 'صورة مرفوعة من جهازك')
-                            : 'رابط خارجي معتمد'}
+                            : 'رابط خارجي'}
                         </span>
                       </div>
                     </div>
 
-                    {/* Image Action Buttons */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {/* DOWNLOAD BUTTON */}
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         type="button"
                         onClick={() => downloadProductImage(formData.image, formData.title || 'product', showToast)}
                         style={{
-                          padding: '7px 12px',
+                          padding: '6px 10px',
                           backgroundColor: 'rgba(56, 189, 248, 0.15)',
                           border: '1px solid rgba(56, 189, 248, 0.3)',
                           color: '#38bdf8',
                           borderRadius: '8px',
-                          fontSize: '12px',
+                          fontSize: '11px',
                           fontWeight: '700',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '5px',
+                          gap: '4px',
                           cursor: 'pointer'
                         }}
-                        title="تحميل الصورة إلى جهاز الكمبيوتر أو الهاتف"
+                        title="تحميل الصورة"
                       >
-                        <Download size={14} />
-                        تحميل الصورة
+                        <Download size={13} />
+                        تحميل
                       </button>
 
-                      {/* REPLACE IMAGE BUTTON */}
                       <button
                         type="button"
                         onClick={() => fileInputRef.current && fileInputRef.current.click()}
                         style={{
-                          padding: '7px 12px',
+                          padding: '6px 10px',
                           backgroundColor: 'rgba(99, 102, 241, 0.15)',
                           border: '1px solid rgba(99, 102, 241, 0.3)',
                           color: '#818cf8',
                           borderRadius: '8px',
-                          fontSize: '12px',
+                          fontSize: '11px',
                           fontWeight: '700',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '5px',
+                          gap: '4px',
                           cursor: 'pointer'
                         }}
                       >
-                        <UploadCloud size={14} />
+                        <UploadCloud size={13} />
                         استبدال
                       </button>
 
-                      {/* REMOVE BUTTON */}
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, image: '' })}
                         style={{
-                          padding: '7px 10px',
+                          padding: '6px 9px',
                           backgroundColor: 'rgba(239, 68, 68, 0.12)',
                           border: '1px solid rgba(239, 68, 68, 0.25)',
                           color: '#f87171',
                           borderRadius: '8px',
-                          fontSize: '12px',
+                          fontSize: '11px',
                           cursor: 'pointer'
                         }}
                         title="إزالة الصورة"
                       >
-                        <X size={14} />
+                        <X size={13} />
                       </button>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Options & Variants */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: '700', color: '#e2e8f0' }}>
-                    الفئات والخيارات المتاحة (اختياري)
-                  </label>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button 
-                      type="button" 
-                      onClick={() => applyPreset('crypto')}
-                      style={{ fontSize: '11px', color: '#818cf8', backgroundColor: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: '4px' }}
+              {/* ─── ENHANCED MULTI-ITEMS & VARIANT BUILDER BOX ─── */}
+              <div style={{ 
+                backgroundColor: '#111827', 
+                border: '1px solid #1f2937', 
+                borderRadius: '18px', 
+                padding: '18px' 
+              }}>
+                {/* Header */}
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  marginBottom: '12px',
+                  flexWrap: 'wrap',
+                  gap: '10px'
+                }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Layers size={18} color="#a5b4fc" />
+                      <span style={{ fontSize: '14px', fontWeight: '900', color: 'white' }}>
+                        باقات وفئات المنتج (تعدد العناصر داخل البطاقة)
+                      </span>
+                      <span style={{
+                        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                        color: '#a5b4fc',
+                        fontSize: '11px',
+                        fontWeight: '800',
+                        padding: '2px 8px',
+                        borderRadius: '999px'
+                      }}>
+                        {formData.options.length} فئات
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
+                      تظهر هذه الفئات كأزرار تفاعلية داخل بطاقة المنتج في المتجر لتمكين العميل من اختيار الباقة المطلوبة بنقرة واحدة
+                    </p>
+                  </div>
+
+                  {/* Mode switcher tabs (Visual vs Quick Text) */}
+                  <div style={{ display: 'flex', backgroundColor: '#0b1120', padding: '3px', borderRadius: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setVariantMode('visual')}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '7px',
+                        fontSize: '12px',
+                        fontWeight: variantMode === 'visual' ? '800' : '600',
+                        backgroundColor: variantMode === 'visual' ? '#4f46e5' : 'transparent',
+                        color: variantMode === 'visual' ? 'white' : '#94a3b8',
+                        cursor: 'pointer'
+                      }}
                     >
-                      + نموذج USDT
+                      قائمة مرئية تفاعلية
                     </button>
-                    <button 
-                      type="button" 
-                      onClick={() => applyPreset('pubg')}
-                      style={{ fontSize: '11px', color: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: '4px' }}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOptionsStr(syncToText(formData.options));
+                        setVariantMode('text');
+                      }}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '7px',
+                        fontSize: '12px',
+                        fontWeight: variantMode === 'text' ? '800' : '600',
+                        backgroundColor: variantMode === 'text' ? '#4f46e5' : 'transparent',
+                        color: variantMode === 'text' ? 'white' : '#94a3b8',
+                        cursor: 'pointer'
+                      }}
                     >
-                      + نموذج ببجي
+                      تحرير نصي سريع
                     </button>
                   </div>
                 </div>
-                <textarea 
-                  className="form-input" 
-                  rows={3}
-                  placeholder={"100 USDT: 101.50\n500 USDT: 505.00"}
-                  value={formData.optionsStr}
-                  onChange={e => setFormData({ ...formData, optionsStr: e.target.value })}
-                  style={{ fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#1e293b', borderColor: '#334155' }}
-                />
-                <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                  اكتب كل فئة في سطر منفصل بالصيغة: <strong style={{ color: '#94a3b8' }}>الاسم: السعر</strong> (مثال: 60 UC: 0.99)
-                </span>
+
+                {/* 1-Click Presets Toolbar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  overflowX: 'auto',
+                  padding: '8px 0 12px 0',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  marginBottom: '14px'
+                }} className="hide-scrollbar">
+                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '700', flexShrink: 0 }}>
+                    ⚡ نماذج بنقرة واحدة:
+                  </span>
+                  
+                  <button 
+                    type="button" 
+                    onClick={() => applyPreset('usdt')}
+                    style={{ 
+                      flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                      fontSize: '11px', fontWeight: '700', color: '#10b981', 
+                      backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    💎 USDT
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => applyPreset('pubg')}
+                    style={{ 
+                      flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                      fontSize: '11px', fontWeight: '700', color: '#f59e0b', 
+                      backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🎮 ببجي UC
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => applyPreset('freefire')}
+                    style={{ 
+                      flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                      fontSize: '11px', fontWeight: '700', color: '#f43f5e', 
+                      backgroundColor: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.25)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🔥 فري فاير
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => applyPreset('roblox')}
+                    style={{ 
+                      flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                      fontSize: '11px', fontWeight: '700', color: '#06b6d4', 
+                      backgroundColor: 'rgba(6, 182, 212, 0.1)', border: '1px solid rgba(6, 182, 212, 0.25)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🕹️ روبلوكس
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => applyPreset('playstation')}
+                    style={{ 
+                      flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                      fontSize: '11px', fontWeight: '700', color: '#3b82f6', 
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.25)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🎮 بلايستيشن
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => applyPreset('apple')}
+                    style={{ 
+                      flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                      fontSize: '11px', fontWeight: '700', color: '#a855f7', 
+                      backgroundColor: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.25)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🍎 آبل ستور
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => applyPreset('google')}
+                    style={{ 
+                      flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                      fontSize: '11px', fontWeight: '700', color: '#10b981', 
+                      backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🌐 جوجل بلاي
+                  </button>
+
+                  {formData.options.length > 0 && (
+                    <button 
+                      type="button" 
+                      onClick={handleClearAllVariants}
+                      style={{ 
+                        flexShrink: 0, padding: '3px 9px', borderRadius: '6px', 
+                        fontSize: '11px', fontWeight: '700', color: '#f87171', 
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)',
+                        cursor: 'pointer', marginRight: 'auto'
+                      }}
+                    >
+                      مسح الكل
+                    </button>
+                  )}
+                </div>
+
+                {/* ─── VISUAL BUILDER MODE ─── */}
+                {variantMode === 'visual' && (
+                  <div>
+                    {formData.options.length === 0 ? (
+                      <div style={{
+                        padding: '24px',
+                        textAlign: 'center',
+                        backgroundColor: '#0b1120',
+                        borderRadius: '12px',
+                        border: '1px dashed #334155',
+                        marginBottom: '14px'
+                      }}>
+                        <Layers size={28} color="#64748b" style={{ margin: '0 auto 8px' }} />
+                        <p style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '700', marginBottom: '4px' }}>
+                          لا توجد فئات محددة لهذا المنتج حالياً
+                        </p>
+                        <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '14px' }}>
+                          سيباع المنتج بسعر ثابت واحد ({formData.price || 0} MRU). اضغط على الزر أدناه لإضافة خيارات متعددة.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleAddVariant}
+                          style={{
+                            padding: '7px 16px',
+                            backgroundColor: '#4f46e5',
+                            color: 'white',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Plus size={15} />
+                          إضافة أول فئة للمنتج
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                        {formData.options.map((opt, idx) => {
+                          const hasDiscount = opt.originalPrice && parseFloat(opt.originalPrice) > parseFloat(opt.price);
+                          const discountPct = hasDiscount 
+                            ? Math.round(((parseFloat(opt.originalPrice) - parseFloat(opt.price)) / parseFloat(opt.originalPrice)) * 100) 
+                            : null;
+
+                          return (
+                            <div 
+                              key={opt.id || idx}
+                              style={{
+                                backgroundColor: '#0a0f1d',
+                                border: '1px solid #1e293b',
+                                borderRadius: '12px',
+                                padding: '12px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '10px'
+                              }}
+                            >
+                              {/* Top Bar of Variant: #Index, Reorder, Duplicate, Delete */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ 
+                                    width: '22px', height: '22px', borderRadius: '6px', 
+                                    backgroundColor: 'rgba(99, 102, 241, 0.2)', color: '#818cf8',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '11px', fontWeight: '800'
+                                  }}>
+                                    {idx + 1}
+                                  </span>
+                                  <span style={{ fontSize: '12px', fontWeight: '800', color: 'white' }}>
+                                    {opt.label || `فئة رقم ${idx + 1}`}
+                                  </span>
+                                  {discountPct && (
+                                    <span style={{ 
+                                      fontSize: '10px', fontWeight: '800', color: '#10b981', 
+                                      backgroundColor: 'rgba(16, 185, 129, 0.15)', padding: '1px 6px', borderRadius: '4px' 
+                                    }}>
+                                      خصم {discountPct}%
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  {/* Move Up */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveVariant(idx, -1)}
+                                    disabled={idx === 0}
+                                    style={{
+                                      padding: '4px 6px', borderRadius: '6px',
+                                      backgroundColor: 'rgba(255,255,255,0.05)',
+                                      color: idx === 0 ? '#475569' : '#94a3b8',
+                                      cursor: idx === 0 ? 'not-allowed' : 'pointer'
+                                    }}
+                                    title="تحريك لأعلى"
+                                  >
+                                    <ArrowUp size={13} />
+                                  </button>
+
+                                  {/* Move Down */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveVariant(idx, 1)}
+                                    disabled={idx === formData.options.length - 1}
+                                    style={{
+                                      padding: '4px 6px', borderRadius: '6px',
+                                      backgroundColor: 'rgba(255,255,255,0.05)',
+                                      color: idx === formData.options.length - 1 ? '#475569' : '#94a3b8',
+                                      cursor: idx === formData.options.length - 1 ? 'not-allowed' : 'pointer'
+                                    }}
+                                    title="تحريك لأسفل"
+                                  >
+                                    <ArrowDown size={13} />
+                                  </button>
+
+                                  {/* Duplicate */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDuplicateVariant(idx)}
+                                    style={{
+                                      padding: '4px 8px', borderRadius: '6px',
+                                      backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                                      color: '#818cf8',
+                                      fontSize: '11px', fontWeight: '700',
+                                      display: 'flex', alignItems: 'center', gap: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                    title="تكرار هذه الفئة"
+                                  >
+                                    <Copy size={12} />
+                                    نسخ
+                                  </button>
+
+                                  {/* Delete */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveVariant(idx)}
+                                    style={{
+                                      padding: '4px 8px', borderRadius: '6px',
+                                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                                      color: '#f87171',
+                                      fontSize: '11px', fontWeight: '700',
+                                      display: 'flex', alignItems: 'center', gap: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                    title="حذف هذه الفئة"
+                                  >
+                                    <Trash2 size={12} />
+                                    حذف
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Inputs Grid for Variant */}
+                              <div style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+                                gap: '10px' 
+                              }}>
+                                {/* Label */}
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                                    اسم الفئة / الكمية *
+                                  </span>
+                                  <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="مثال: 660 UC أو 100 USDT"
+                                    value={opt.label}
+                                    onChange={e => handleUpdateVariant(idx, 'label', e.target.value)}
+                                    style={{ backgroundColor: '#131b2e', borderColor: '#26354a', fontSize: '12.5px', padding: '7px 10px' }}
+                                    required
+                                  />
+                                </div>
+
+                                {/* Price */}
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                                    سعر البيع (MRU) *
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    className="form-input"
+                                    placeholder="101.50"
+                                    value={opt.price}
+                                    onChange={e => handleUpdateVariant(idx, 'price', e.target.value)}
+                                    style={{ backgroundColor: '#131b2e', borderColor: '#26354a', fontSize: '12.5px', padding: '7px 10px', color: '#10b981', fontWeight: '800' }}
+                                    required
+                                  />
+                                </div>
+
+                                {/* Original Price */}
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                                    السعر قبل الخصم (اختياري)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    className="form-input"
+                                    placeholder="مثال: 120.00"
+                                    value={opt.originalPrice || ''}
+                                    onChange={e => handleUpdateVariant(idx, 'originalPrice', e.target.value)}
+                                    style={{ backgroundColor: '#131b2e', borderColor: '#26354a', fontSize: '12.5px', padding: '7px 10px' }}
+                                  />
+                                </div>
+
+                                {/* Badge */}
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                                    شارة ترويجية (اختياري)
+                                  </span>
+                                  <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="مثال: الأكثر طلباً 🔥"
+                                    value={opt.badge || ''}
+                                    onChange={e => handleUpdateVariant(idx, 'badge', e.target.value)}
+                                    style={{ backgroundColor: '#131b2e', borderColor: '#26354a', fontSize: '12.5px', padding: '7px 10px' }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Quick Badge Suggestions */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '10px', color: '#64748b' }}>اقتراح شارة:</span>
+                                {['الأكثر طلباً 🔥', 'وفر 10%', 'بونص مجاني 🎁', 'الأفضل قيمة ⭐', 'عرض محدود ⏳'].map(suggested => (
+                                  <button
+                                    key={suggested}
+                                    type="button"
+                                    onClick={() => handleUpdateVariant(idx, 'badge', suggested)}
+                                    style={{
+                                      fontSize: '9.5px',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      backgroundColor: opt.badge === suggested ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.04)',
+                                      color: opt.badge === suggested ? '#fbbf24' : '#94a3b8',
+                                      border: `1px solid ${opt.badge === suggested ? '#f59e0b' : 'rgba(255,255,255,0.08)'}`,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    + {suggested}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Actions: Add Variant & Sync Price */}
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={handleAddVariant}
+                        style={{
+                          padding: '9px 18px',
+                          borderRadius: '10px',
+                          backgroundColor: 'rgba(99, 102, 241, 0.18)',
+                          border: '1px solid rgba(99, 102, 241, 0.35)',
+                          color: '#c7d2fe',
+                          fontWeight: '800',
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        <Plus size={16} />
+                        إضافة فئة / باقة جديدة
+                      </button>
+
+                      {formData.options.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleSetPriceFromLowest}
+                          style={{
+                            padding: '9px 14px',
+                            borderRadius: '10px',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            color: '#34d399',
+                            fontWeight: '700',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Zap size={14} />
+                          مزامنة السعر الأساسي من أقل فئة
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ─── QUICK TEXT MODE (FOR BULK COPY/PASTE) ─── */}
+                {variantMode === 'text' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                        اكتب كل فئة في سطر منفصل بالصيغة: <strong style={{ color: '#c7d2fe' }}>الاسم: السعر: السعر_قبل_الخصم: الشارة</strong>
+                      </span>
+                    </div>
+                    <textarea 
+                      className="form-input" 
+                      rows={5}
+                      placeholder={"60 UC: 0.99\n325 UC: 4.99 : 5.50 : +25 مجاناً\n660 UC: 9.99 : 11.50 : الأكثر طلباً 🔥"}
+                      value={optionsStr}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setOptionsStr(val);
+                        setFormData(prev => ({ ...prev, options: syncFromText(val) }));
+                      }}
+                      style={{ fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#0a0f1d', borderColor: '#26354a' }}
+                    />
+                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                      سيتم تحويل هذا النص تلقائياً إلى بطاقات وخيارات قابلة للاختيار والنقر المباشر في واجهة المتجر.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Description */}
@@ -1207,7 +2041,7 @@ export default function Products() {
                   placeholder="وصف تفصيلي، طريقة التسليم، مدة الشحن..."
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  style={{ backgroundColor: '#1e293b', borderColor: '#334155', fontSize: '13px' }}
+                  style={{ backgroundColor: '#131b2e', borderColor: '#26354a', fontSize: '13px' }}
                 />
               </div>
 
@@ -1232,7 +2066,7 @@ export default function Products() {
                   className="btn" 
                   style={{ 
                     padding: '13px 20px', 
-                    backgroundColor: '#1e293b', 
+                    backgroundColor: '#131b2e', 
                     color: '#94a3b8',
                     borderRadius: '12px',
                     fontWeight: '700'

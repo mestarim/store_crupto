@@ -18,9 +18,9 @@ const initialProducts = [
     description: 'شراء وتعبئة عملة USDT الرقمية (TRC20 / BEP20) بشكل فوري ومباشر لمحفظتك بأفضل سعر صرف.',
     options: [ 
       { label: '50 USDT', price: 51.00 },
-      { label: '100 USDT', price: 101.50 }, 
-      { label: '500 USDT', price: 505.00 }, 
-      { label: '1000 USDT', price: 1008.00 } 
+      { label: '100 USDT', price: 101.50, badge: 'الأكثر طلباً 🔥' }, 
+      { label: '500 USDT', price: 505.00, originalPrice: 510.00, badge: 'وفر 5 MRU' }, 
+      { label: '1000 USDT', price: 1008.00, originalPrice: 1020.00, badge: 'أفضل سعر ⭐' } 
     ] 
   },
   { 
@@ -33,9 +33,9 @@ const initialProducts = [
     description: 'شحن فوري ومباشر لشدات ببجي موبايل عن طريق الآيدي (ID). شحن رسمي ومضمون 100%.',
     options: [ 
       { label: '60 UC', price: 0.99 }, 
-      { label: '325 UC', price: 4.99 }, 
-      { label: '660 UC', price: 9.99 }, 
-      { label: '1800 UC', price: 24.99 } 
+      { label: '325 UC', price: 4.99, badge: '+25 مجاناً' }, 
+      { label: '660 UC', price: 9.99, originalPrice: 11.50, badge: 'الأكثر طلباً 🔥' }, 
+      { label: '1800 UC', price: 24.99, originalPrice: 28.00, badge: 'بونص +300 🎁' } 
     ] 
   },
   { 
@@ -48,8 +48,8 @@ const initialProducts = [
     description: 'بطاقات بلايستيشن ستور رصيد أمريكي وسعودي لشراء الألعاب والاشتراكات في PS Plus.',
     options: [ 
       { label: '$10', price: 9.90 }, 
-      { label: '$20', price: 19.50 }, 
-      { label: '$50', price: 49.00 } 
+      { label: '$20', price: 19.50, badge: 'الأكثر مبيعاً' }, 
+      { label: '$50', price: 49.00, originalPrice: 55.00, badge: 'خصم خاص ✨' } 
     ] 
   },
   { 
@@ -62,8 +62,8 @@ const initialProducts = [
     description: 'شراء كسر بيتكوين ونقل مباشر إلى عنوان محفظتك بأمان وبدون تعقيد.',
     options: [
       { label: '0.001 BTC', price: 95.00 },
-      { label: '0.005 BTC', price: 470.00 },
-      { label: '0.01 BTC', price: 930.00 }
+      { label: '0.005 BTC', price: 470.00, badge: 'عرض الأسبوع' },
+      { label: '0.01 BTC', price: 930.00, originalPrice: 950.00, badge: 'أفضل قيمة' }
     ]
   },
   { 
@@ -76,8 +76,8 @@ const initialProducts = [
     description: 'شحن جواهر فري فاير بواسطة المعرف ID فوراً وبسرعة فائقة.',
     options: [ 
       { label: '100 Diamonds', price: 1.00 }, 
-      { label: '520 Diamonds', price: 5.20 }, 
-      { label: '1080 Diamonds', price: 10.50 } 
+      { label: '520 Diamonds', price: 5.20, badge: '+50 بونص' }, 
+      { label: '1080 Diamonds', price: 10.50, originalPrice: 12.00, badge: 'عرض مميز 🔥' } 
     ] 
   },
   { 
@@ -90,8 +90,8 @@ const initialProducts = [
     description: 'بطاقات آبل وأيتونز لشراء التطبيقات والاشتراكات في Apple Music و iCloud.',
     options: [ 
       { label: '$10', price: 9.99 }, 
-      { label: '$25', price: 24.50 }, 
-      { label: '$50', price: 49.00 } 
+      { label: '$25', price: 24.50, badge: 'شائع' }, 
+      { label: '$50', price: 49.00, originalPrice: 52.00, badge: 'وفر 3 MRU' } 
     ] 
   },
 ];

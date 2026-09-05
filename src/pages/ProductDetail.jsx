@@ -162,13 +162,34 @@ export default function ProductDetail({ onBack }) {
           border: '1px solid rgba(16,185,129,0.15)'
         }}>
           <div>
-            <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-subtle)', marginBottom: '3px' }}>
-              {quantity > 1 ? `${currentPrice} MRU × ${quantity}` : 'السعر الإجمالي'}
-            </span>
-            <span style={{ fontSize: '28px', fontWeight: '900', color: 'var(--accent)', lineHeight: 1 }}>
-              {totalPrice}
-            </span>
-            <span style={{ fontSize: '14px', color: 'var(--text-muted)', marginRight: '4px' }}>MRU</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-subtle)' }}>
+                {quantity > 1 ? `${currentPrice} MRU × ${quantity}` : 'السعر الإجمالي'}
+              </span>
+              {selectedOption?.originalPrice && selectedOption.originalPrice > currentPrice && (
+                <span style={{ 
+                  fontSize: '10px', 
+                  color: '#10b981', 
+                  fontWeight: '800', 
+                  backgroundColor: 'rgba(16,185,129,0.15)', 
+                  padding: '1px 6px', 
+                  borderRadius: '4px' 
+                }}>
+                  وفر {Math.round(((selectedOption.originalPrice - currentPrice) / selectedOption.originalPrice) * 100)}%
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ fontSize: '28px', fontWeight: '900', color: 'var(--accent)', lineHeight: 1 }}>
+                {totalPrice}
+              </span>
+              <span style={{ fontSize: '14px', color: 'var(--text-muted)', marginRight: '4px' }}>MRU</span>
+              {selectedOption?.originalPrice && selectedOption.originalPrice > currentPrice && (
+                <span style={{ fontSize: '14px', color: '#64748b', textDecoration: 'line-through' }}>
+                  {(selectedOption.originalPrice * quantity).toFixed(2)} MRU
+                </span>
+              )}
+            </div>
           </div>
 
           <div style={{ 
@@ -221,22 +242,23 @@ export default function ProductDetail({ onBack }) {
               display: 'flex', alignItems: 'center', gap: '8px'
             }}>
               <Zap size={16} color="var(--accent-secondary)" />
-              اختر الباقة:
+              اختر الباقة / الفئة المطلوبة:
             </h3>
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
-              gap: '10px' 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
+              gap: '12px' 
             }}>
               {product.options.map((option, index) => {
                 const isActive = selectedOption && selectedOption.label === option.label;
+                const hasDiscount = option.originalPrice && option.originalPrice > option.price;
                 return (
                   <button 
                     key={index} 
                     type="button"
                     onClick={() => setSelectedOption(option)}
                     style={{
-                      padding: '13px 10px',
+                      padding: '14px 12px',
                       borderRadius: 'var(--radius-md)',
                       border: `2px solid ${isActive ? 'var(--primary)' : 'var(--border-color)'}`,
                       background: isActive 
@@ -246,28 +268,53 @@ export default function ProductDetail({ onBack }) {
                       cursor: 'pointer',
                       transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                       position: 'relative',
-                      boxShadow: isActive ? '0 4px 16px rgba(99,102,241,0.2)' : 'none'
+                      boxShadow: isActive ? '0 4px 16px rgba(99,102,241,0.2)' : 'none',
+                      textAlign: 'right'
                     }}
                   >
                     {isActive && (
                       <div style={{ 
-                        position: 'absolute', top: '6px', left: '6px',
+                        position: 'absolute', top: '8px', left: '8px',
                         backgroundColor: 'var(--primary)',
                         borderRadius: '50%',
-                        width: '16px', height: '16px',
+                        width: '18px', height: '18px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                       }}>
-                        <Check size={10} color="white" strokeWidth={3} />
+                        <Check size={11} color="white" strokeWidth={3} />
                       </div>
                     )}
-                    <div style={{ fontSize: '14px', fontWeight: '700', marginBottom: '6px', color: isActive ? 'var(--primary)' : 'var(--text-main)' }}>
+                    
+                    {option.badge && (
+                      <div style={{
+                        display: 'inline-block',
+                        fontSize: '9.5px',
+                        fontWeight: '800',
+                        color: '#fbbf24',
+                        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        marginBottom: '6px'
+                      }}>
+                        {option.badge}
+                      </div>
+                    )}
+
+                    <div style={{ fontSize: '14px', fontWeight: '800', marginBottom: '4px', color: isActive ? '#fff' : 'var(--text-main)' }}>
                       {option.label}
                     </div>
-                    <div style={{ 
-                      fontSize: '15px', fontWeight: '800', 
-                      color: isActive ? '#34d399' : 'var(--accent)'
-                    }}>
-                      {option.price} <span style={{ fontSize: '11px', fontWeight: '600' }}>MRU</span>
+
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                      <span style={{ 
+                        fontSize: '16px', fontWeight: '800', 
+                        color: isActive ? '#34d399' : 'var(--accent)'
+                      }}>
+                        {option.price} <span style={{ fontSize: '11px', fontWeight: '600' }}>MRU</span>
+                      </span>
+                      {hasDiscount && (
+                        <span style={{ fontSize: '11px', color: '#64748b', textDecoration: 'line-through' }}>
+                          {option.originalPrice}
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
